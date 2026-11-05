@@ -17,7 +17,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./complaints.db")
 if DATABASE_URL.startswith("postgres://"):
    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+connect_args = (
+    {"check_same_thread": False}
+    if DATABASE_URL.startswith("sqlite")
+    else {"connect_timeout": 30}
+)
 
 engine = create_engine(
     DATABASE_URL,
@@ -72,12 +76,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://rdchampion.me",
-        "http://127.0.0.1:5500"
-
-    ],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -101,9 +100,9 @@ def facilities(
             query = query.filter(Facilities.has_visual_aids == has_visual_aids)
         if has_hearing_aids is not None:
             query = query.filter(Facilities.has_hearing_aids == has_hearing_aids)
-        if language is not None:
-            query = query.filter(Facilities.languages_supported.contains(language))
         facilities = query.all()
+        if language is not None:
+            facilities = [f for f in facilities if language in f.languages_supported]
         if not facilities:
             raise HTTPException(status_code=404, detail="No facilities match the given constraints")
         return facilities
