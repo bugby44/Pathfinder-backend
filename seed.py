@@ -1,6 +1,7 @@
 import random
+from datetime import date, datetime, timedelta
 
-from main import Base, Doctors, Facilities, SessionLocal, engine
+from main import AppointmentSlots, Base, Doctors, Facilities, SessionLocal, engine
 
 Base.metadata.create_all(bind=engine)
 
@@ -61,6 +62,29 @@ def random_doctor(facility_id):
     )
 
 
+SLOT_START_HOUR = 9
+SLOT_END_HOUR = 17
+SLOT_MINUTES = 30
+
+
+def slots_for_doctor(doctor_id, day):
+    current = datetime.combine(day, datetime.min.time()).replace(hour=SLOT_START_HOUR)
+    end = datetime.combine(day, datetime.min.time()).replace(hour=SLOT_END_HOUR)
+    slots = []
+    while current < end:
+        slot_end = current + timedelta(minutes=SLOT_MINUTES)
+        slots.append(
+            AppointmentSlots(
+                doctor_id=doctor_id,
+                start_time=current,
+                end_time=slot_end,
+                is_available=True,
+            )
+        )
+        current = slot_end
+    return slots
+
+
 def seed():
     session = SessionLocal()
     try:
@@ -73,8 +97,14 @@ def seed():
                 session.add(random_doctor(facility.id))
         session.commit()
 
-        doctor_count = session.query(Doctors).count()
-        print(f"Seeded {len(facilities)} facilities and {doctor_count} doctors.")
+        doctors = session.query(Doctors).order_by(Doctors.id).all()
+        today = date.today()
+        for doctor in doctors:
+            session.add_all(slots_for_doctor(doctor.id, today))
+        session.commit()
+
+        slot_count = session.query(AppointmentSlots).count()
+        print(f"Seeded {len(facilities)} facilities, {len(doctors)} doctors, and {slot_count} appointment slots.")
     finally:
         session.close()
 
