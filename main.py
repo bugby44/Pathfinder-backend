@@ -12,8 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-MOD_PASSWORD = os.environ["MOD_PASSWORD"]
-
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./complaints.db")
 
 if DATABASE_URL.startswith("postgres://"):
