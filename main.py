@@ -86,6 +86,15 @@ class AppointmentSlots(Base):
     booked_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
+class Waitlist(Base):
+    __tablename__ = "waitlist"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    slot_id: Mapped[int] = mapped_column(ForeignKey("appointment_slots.id"), unique=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class FacOut(BaseModel):
     id: int
     name: str
@@ -138,6 +147,15 @@ class SlotOut(BaseModel):
     start_time: datetime
     end_time: datetime
     is_available: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WaitlistOut(BaseModel):
+    id: int
+    user_id: int
+    slot_id: int
+    requested_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -219,6 +237,18 @@ def slots(doctor_id: int | None = None, only_available: bool = True):
         return slots
 
 
+@app.get("/slots/booked", response_model=list[SlotOut], tags=["Appointment Slots"])
+def booked_slots(doctor_id: int | None = None):
+    with SessionLocal() as session:
+        query = session.query(AppointmentSlots).filter(AppointmentSlots.is_available == False)
+        if doctor_id is not None:
+            query = query.filter(AppointmentSlots.doctor_id == doctor_id)
+        slots = query.order_by(AppointmentSlots.start_time).all()
+        if not slots:
+            raise HTTPException(status_code=404, detail="No booked slots match the given constraints")
+        return slots
+
+
 @app.post("/slots/{slot_id}/book", response_model=SlotOut, tags=["Appointment Slots"])
 def book_slot(slot_id: int, user_id: int):
     with SessionLocal() as session:
@@ -242,6 +272,28 @@ def book_slot(slot_id: int, user_id: int):
 
         session.refresh(slot)
         return slot
+
+
+@app.post("/waitlist", response_model=WaitlistOut, tags=["Appointment Slots"])
+def join_waitlist(user_id: int, slot_id: int):
+    with SessionLocal() as session:
+        user = session.get(Users, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        slot = session.get(AppointmentSlots, slot_id)
+        if slot is None:
+            raise HTTPException(status_code=404, detail="Slot not found")
+
+        existing = session.query(Waitlist).filter(Waitlist.slot_id == slot_id).first()
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="Someone is already waiting for this slot")
+
+        entry = Waitlist(user_id=user_id, slot_id=slot_id)
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+        return entry
 
 
 @app.post("/signup", response_model=UserOut, tags=["Auth"])
@@ -337,6 +389,32 @@ def reschedule_appointment(slot_id: int, new_slot_id: int, user_id: int):
 
         session.refresh(new_slot)
         return new_slot
+
+
+@app.post("/appointments/{slot_id}/cancel", response_model=SlotOut, tags=["Appointments"])
+def cancel_appointment(slot_id: int, user_id: int):
+    with SessionLocal() as session:
+        user = session.get(Users, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        slot = session.get(AppointmentSlots, slot_id)
+        if slot is None:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        if slot.booked_by_user_id != user_id:
+            raise HTTPException(status_code=403, detail="This appointment does not belong to this user")
+
+        waiting = session.query(Waitlist).filter(Waitlist.slot_id == slot_id).first()
+        if waiting is not None:
+            slot.booked_by_user_id = waiting.user_id
+            session.delete(waiting)
+        else:
+            slot.is_available = True
+            slot.booked_by_user_id = None
+
+        session.commit()
+        session.refresh(slot)
+        return slot
 
 
 @app.patch("/checklist", response_model=UserOut, tags=["Checklist"])
