@@ -188,13 +188,7 @@ def facilities(
         return facilities
 
 
-@app.get("/facilities/{facility_id}", response_model=FacOut, tags=["Facilities"])
-def facility_by_id(facility_id: int):
-    with SessionLocal() as session:
-        facility = session.get(Facilities, facility_id)
-        if facility is None:
-            raise HTTPException(status_code=404, detail="Facility not found")
-        return facility
+
 
 
 @app.get("/doctors", response_model=list[DoctorOut], tags=["Doctors"])
