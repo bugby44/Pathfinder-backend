@@ -93,6 +93,8 @@ class FacOut(BaseModel):
     has_wheelchair: bool
     has_visual_aids: bool
     has_hearing_aids: bool
+    latitude: float
+    longitude: float
 
     model_config = ConfigDict(from_attributes=True)
 
