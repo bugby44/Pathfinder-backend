@@ -52,6 +52,7 @@ class Facilities(Base):
     has_hearing_aids: Mapped[bool] = mapped_column(Boolean, default=False)
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
+    rating: Mapped[float] = mapped_column(Float)
 
 class Doctors(Base):
     __tablename__ = "doctors"
@@ -95,6 +96,7 @@ class FacOut(BaseModel):
     has_hearing_aids: bool
     latitude: float
     longitude: float
+    rating: float
 
     model_config = ConfigDict(from_attributes=True)
 
